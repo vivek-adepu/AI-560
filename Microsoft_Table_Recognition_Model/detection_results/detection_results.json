@@ -1,0 +1,112 @@
+{
+  "image_path": "test_26_30.png",
+  "image_size": [
+    480,
+    555
+  ],
+  "total_rectangles": 5,
+  "counts_by_type": {
+    "table column": 2,
+    "table row": 2,
+    "table": 1
+  },
+  "detections": [
+    {
+      "class": "table column",
+      "confidence": 0.681,
+      "box": [
+        41.54,
+        37.72,
+        101.27,
+        519.4
+      ],
+      "center": [
+        71.41,
+        278.56
+      ],
+      "dimensions": {
+        "width": 59.73,
+        "height": 481.68
+      },
+      "area": 28770.75
+    },
+    {
+      "class": "table row",
+      "confidence": 0.611,
+      "box": [
+        44.87,
+        55.02,
+        419.0,
+        84.82
+      ],
+      "center": [
+        231.94,
+        69.92
+      ],
+      "dimensions": {
+        "width": 374.13,
+        "height": 29.8
+      },
+      "area": 11149.07
+    },
+    {
+      "class": "table column",
+      "confidence": 0.697,
+      "box": [
+        359.95,
+        39.05,
+        416.33,
+        519.61
+      ],
+      "center": [
+        388.14,
+        279.33
+      ],
+      "dimensions": {
+        "width": 56.38,
+        "height": 480.56
+      },
+      "area": 27093.97
+    },
+    {
+      "class": "table row",
+      "confidence": 0.695,
+      "box": [
+        43.33,
+        35.83,
+        418.4,
+        56.44
+      ],
+      "center": [
+        230.86,
+        46.13
+      ],
+      "dimensions": {
+        "width": 375.07,
+        "height": 20.61
+      },
+      "area": 7730.19
+    },
+    {
+      "class": "table",
+      "confidence": 0.839,
+      "box": [
+        43.8,
+        40.45,
+        416.98,
+        519.09
+      ],
+      "center": [
+        230.39,
+        279.77
+      ],
+      "dimensions": {
+        "width": 373.18,
+        "height": 478.64
+      },
+      "area": 178618.88
+    }
+  ],
+  "timestamp": "2025-11-14T01:30:14.013589",
+  "confidence_threshold": 0.6
+}
