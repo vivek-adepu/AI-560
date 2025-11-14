@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useRef } = React;
+    
+    // Lucide icons as inline SVG components
+    const Upload = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+      </svg>
+    );
+    
+    const Target = () => (
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+      </svg>
+    );
+    
+    const Download = () => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+      </svg>
+    );
+
+    // Paste your entire SquareDetector component code here
+    const SquareDetector = () => {
+      const [image, setImage] = useState(null);
+      const [detectedSquares, setDetectedSquares] = useState([]);
+      const [processing, setProcessing] = useState(false);
+      const [minSize, setMinSize] = useState(3);
+      const [maxSize, setMaxSize] = useState(50);
+      const canvasRef = useRef(null);
+      const overlayCanvasRef = useRef(null);
+
+      const handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+              setImage(img);
+              drawImage(img);
+            };
+            img.src = event.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
+      };
+
+      const drawImage = (img) => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+
+        const overlayCanvas = overlayCanvasRef.current;
+        overlayCanvas.width = img.width;
+        overlayCanvas.height = img.height;
+      };
+
+      const detectSquares = () => {
+        if (!image) return;
+        setProcessing(true);
+
+        setTimeout(() => {
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
+          const width = canvas.width;
+          const height = canvas.height;
+
+          const binary = new Uint8Array(width * height);
+          for (let i = 0; i < data.length; i += 4) {
+            const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            binary[i / 4] = brightness > 128 ? 1 : 0;
+          }
+
+          const labels = new Int32Array(width * height);
+          let currentLabel = 0;
+          const componentMap = new Map();
+
+          const getNeighborLabels = (x, y) => {
+            const neighbors = [];
+            if (x > 0 && labels[y * width + x - 1] > 0) neighbors.push(labels[y * width + x - 1]);
+            if (y > 0 && labels[(y - 1) * width + x] > 0) neighbors.push(labels[(y - 1) * width + x]);
+            return neighbors;
+          };
+
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const idx = y * width + x;
+              if (binary[idx] === 1) {
+                const neighbors = getNeighborLabels(x, y);
+                if (neighbors.length === 0) {
+                  currentLabel++;
+                  labels[idx] = currentLabel;
+                  componentMap.set(currentLabel, currentLabel);
+                } else {
+                  const minLabel = Math.min(...neighbors);
+                  labels[idx] = minLabel;
+                  neighbors.forEach(n => {
+                    if (n !== minLabel) {
+                      componentMap.set(n, minLabel);
+                    }
+                  });
+                }
+              }
+            }
+          }
+
+          const resolveLabel = (label) => {
+            let current = label;
+            while (componentMap.get(current) !== current) {
+              current = componentMap.get(current);
+            }
+            return current;
+          };
+
+          for (let i = 0; i < labels.length; i++) {
+            if (labels[i] > 0) {
+              labels[i] = resolveLabel(labels[i]);
+            }
+          }
+
+          const components = new Map();
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const label = labels[y * width + x];
+              if (label > 0) {
+                if (!components.has(label)) {
+                  components.set(label, {
+                    minX: x, maxX: x, minY: y, maxY: y,
+                    pixels: [], count: 0
+                  });
+                }
+                const comp = components.get(label);
+                comp.minX = Math.min(comp.minX, x);
+                comp.maxX = Math.max(comp.maxX, x);
+                comp.minY = Math.min(comp.minY, y);
+                comp.maxY = Math.max(comp.maxY, y);
+                comp.pixels.push({ x, y });
+                comp.count++;
+              }
+            }
+          }
+
+          const squares = [];
+          components.forEach((comp) => {
+            const w = comp.maxX - comp.minX + 1;
+            const h = comp.maxY - comp.minY + 1;
+            const aspectRatio = w / h;
+            const size = Math.max(w, h);
+            
+            if (size >= minSize && size <= maxSize && 
+                aspectRatio > 0.7 && aspectRatio < 1.4) {
+              
+              const centerX = (comp.minX + comp.maxX) / 2;
+              const centerY = (comp.minY + comp.maxY) / 2;
+              
+              squares.push({
+                center: { x: centerX, y: centerY },
+                bounds: { 
+                  x: comp.minX, 
+                  y: comp.minY, 
+                  width: w, 
+                  height: h 
+                },
+                size: size,
+                aspectRatio: aspectRatio.toFixed(2),
+                pixelCount: comp.count
+              });
+            }
+          });
+
+          setDetectedSquares(squares);
+          drawDetections(squares);
+          setProcessing(false);
+        }, 100);
+      };
+
+      const drawDetections = (squares) => {
+        const canvas = overlayCanvasRef.current;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        squares.forEach((square) => {
+          ctx.strokeStyle = '#00ff00';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(
+            square.bounds.x - 0.5,
+            square.bounds.y - 0.5,
+            square.bounds.width + 1,
+            square.bounds.height + 1
+          );
+
+          ctx.fillStyle = '#ff0000';
+          ctx.beginPath();
+          ctx.arc(square.center.x, square.center.y, 2, 0, 2 * Math.PI);
+          ctx.fill();
+
+          ctx.strokeStyle = '#ff0000';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(square.center.x - 5, square.center.y);
+          ctx.lineTo(square.center.x + 5, square.center.y);
+          ctx.moveTo(square.center.x, square.center.y - 5);
+          ctx.lineTo(square.center.x, square.center.y + 5);
+          ctx.stroke();
+        });
+      };
+
+      const downloadResults = () => {
+        const results = {
+          imageSize: { width: image.width, height: image.height },
+          squaresDetected: detectedSquares.length,
+          squares: detectedSquares
+        };
+        
+        const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'detected_squares.json';
+        a.click();
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-900 text-white p-8">
+          <div className="max-w-6xl mx-auto">
+            <h1 className="text-3xl font-bold mb-2 flex items-center gap-2">
+              <Target />
+              Square Detection System
+            </h1>
+            <p className="text-gray-400 mb-6">
+              Upload an image to detect square shapes and find their centers
+            </p>
+
+            <div className="bg-gray-800 rounded-lg p-6 mb-6">
+              <div className="flex items-center gap-4 mb-4">
+                <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded cursor-pointer transition">
+                  <Upload />
+                  Upload Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </label>
+                
+                <button
+                  onClick={detectSquares}
+                  disabled={!image || processing}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded transition"
+                >
+                  {processing ? 'Processing...' : 'Detect Squares'}
+                </button>
+
+                {detectedSquares.length > 0 && (
+                  <button
+                    onClick={downloadResults}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded transition flex items-center gap-2"
+                  >
+                    <Download />
+                    Download JSON
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm mb-1">Min Size (pixels)</label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={minSize}
+                    onChange={(e) => setMinSize(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                  <span className="text-sm text-gray-400">{minSize}px</span>
+                </div>
+                <div>
+                  <label className="block text-sm mb-1">Max Size (pixels)</label>
+                  <input
+                    type="range"
+                    min="20"
+                    max="200"
+                    value={maxSize}
+                    onChange={(e) => setMaxSize(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                  <span className="text-sm text-gray-400">{maxSize}px</span>
+                </div>
+              </div>
+
+              {detectedSquares.length > 0 && (
+                <div className="bg-gray-700 rounded p-4">
+                  <h3 className="font-bold mb-2">Detection Results</h3>
+                  <p>Detected {detectedSquares.length} squares</p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="relative inline-block">
+                <canvas
+                  ref={canvasRef}
+                  className="border border-gray-600 max-w-full h-auto"
+                />
+                <canvas
+                  ref={overlayCanvasRef}
+                  className="absolute top-0 left-0 max-w-full h-auto pointer-events-none"
+                />
+              </div>
+
+              {detectedSquares.length > 0 && (
+                <div className="mt-4 max-h-96 overflow-y-auto">
+                  <h3 className="font-bold mb-2">Detected Squares:</h3>
+                  <div className="space-y-2">
+                    {detectedSquares.map((square, idx) => (
+                      <div key={idx} className="bg-gray-700 rounded p-3 text-sm">
+                        <div className="font-mono">
+                          Square #{idx + 1}: Center ({square.center.x.toFixed(1)}, {square.center.y.toFixed(1)})
+                        </div>
+                        <div className="text-gray-400 text-xs">
+                          Size: {square.size}px | Aspect: {square.aspectRatio} | Pixels: {square.pixelCount}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<SquareDetector />, document.getElementById('root'));
+  </script>
+</body>
+</html>
